@@ -147,4 +147,5 @@ class Circuit:
 				compVec.append(line.name)
 		return compVec
 	def getNetsFromComp(self,label):
+		pass
 
