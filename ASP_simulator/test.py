@@ -1,8 +1,9 @@
 from Learning import *
 
-circ1 = Circuit("Circ1.txt")
+circ1 = Circuit("Circ2.txt")
 
 # for x in range(len(circ1.compList)):
 #     print circ1.compList[x]
 
-print circ1.getPathToNet('8')
+circ1.printPu()
+#print circ1.getPathToNet('5')

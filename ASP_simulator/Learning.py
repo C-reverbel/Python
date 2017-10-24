@@ -1,10 +1,12 @@
-import copy
 
 class Component:
     name = ""
     type = ""
     net1 = ""
     net2 = ""
+    Vmul = 1
+    X_pu = 0
+    V_pu = 0
 
     def __init__(self, parameters):
         #self.parameters = dict(self.parameters)
@@ -22,10 +24,24 @@ class Component:
             return 1e6 * float(nb.replace('m', '.'))
         else:
             return float(nb)
+    # init pu variables
+    def initPu(self, Vb, Sb):
+        #print 'clacPU: ' + self.name + ' Vb = ' + str(Vb) + ' Sb = ' + str(Sb)
+        if hasattr(self, 'X'):
+            if hasattr(self, 'V'):
+                self.X_pu = self.X * ((self.V**2)/self.S) / ((Vb**2)/Sb)
+            elif hasattr(self, 'VPri'):
+                self.X_pu = self.X * ((self.VPri ** 2) / self.S) / ((Vb ** 2) / Sb)
+        else:
+            # completar isso =========================================
+            self.X_pu = self.L / ((Vb**2)/Sb)
+        if hasattr(self, 'V'):
+            self.V_pu = self.V / Vb
 class Generator(Component):
     V = 0
     S = 0
     X = 0
+
     def __init__(self, parameters):
         self.type = 'G'
         Component.__init__(self, parameters)
@@ -48,6 +64,8 @@ class Transformer(Component):
         self.VSec = self.str2float(parameters[6])
         self.S = self.str2float(parameters[7])
         self.X = self.str2float(parameters[8])
+        # calc Voltage multiplier
+        self.Vmul = self.VSec / self.VPri
 class TransmissionLine(Component):
     R = 0
     L = 0
@@ -62,6 +80,7 @@ class Motor(Component):
     V = 0
     S = 0
     X = 0
+
     def __init__(self, parameters):
         self.type = 'M'
         Component.__init__(self, parameters)
@@ -178,18 +197,10 @@ class Circuit:
         for x in range(len(vect)):
             if name in vect[x].name:
                 return x
-    def unionWithoutDuplicate(self,vect1,vect2):
-        vect = []
-        for i in vect1:
-            if i not in vect:
-                vect.append(i)
-        for i in vect2:
-            if i not in vect:
-                vect.append(i)
-        return vect
     # get Vb of specified net
     def getVbOfNet(self, net):
         pathToNet = self.getPathToNet(net)
+        return self.base['V'] * self.calcVbMultiplier(pathToNet)
         pass
     # return list of elements that goes from base net to specified net
     def getPathToNet(self, net):
@@ -218,24 +229,30 @@ class Circuit:
             # calculate next branch
             branch = [x for x in self.sortComponentsInNet(currentNet, connectionsList)]
         return [x.name for x in path]
-
-    def calcPu(self,compVect, Vb):
-        pass
+    # get component voltage multiplier based on its name
+    def getVoltageMultiplier(self, componentName):
+        return self.compList[self.getIndexByName(componentName,self.compList)].Vmul
+    # calculate the multiplier to get the new Vb
+    def calcVbMultiplier(self,compVect):
+        mul = 1
+        for x in range(len(compVect)):
+            mul *= self.compList[self.getIndexByName(compVect[x],self.compList)].Vmul
+        return mul
 
 
     # ===== metodos publicos =====
+    def printPu(self):
+        self.pu()
+        for i in  range(len(self.compList)):
+            print self.compList[i].name + ' ',
+            if self.compList[i].V_pu:
+                print 'Vpu = ' + str(self.compList[i].V_pu) + ' ',
+            print 'Xpu = ' + str(self.compList[i].X_pu)
     def pu(self):
-        # get list of all nets in the circuit
-        netStack = self.sortNets()
-        for x in range(len(netStack)):
-            # get list of components for current net
-            compVect = self.sortComponentsInNet(netStack[x], self.compList)
-            # get Vb for current net
-            currentVb = self.getVbOfNet(netStack[x])
-            # calculate and update PU values of components in current net
-            self.calcPu(compVect,currentVb)
-
-
+        for x in range(len(self.compList)):
+            currentVb = self.getVbOfNet(self.compList[x].net1)
+            currentSb = self.base['S']
+            self.compList[x].initPu(currentVb, currentSb)
     def printCirc(self):
         pass
     def matrix(self):
