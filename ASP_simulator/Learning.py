@@ -1,38 +1,96 @@
 import copy
 
 class Component:
-    parameters = {
-        "name" : "",
-        "type" : "",
-        "net1" : "",
-        "net2" : "",
-    }
+    name = ""
+    type = ""
+    net1 = ""
+    net2 = ""
+
     def __init__(self, parameters):
-        self.parameters = dict(self.parameters)
-        self.parameters["type"] = parameters[0]
-        self.parameters["name"] = parameters[1]
-        self.parameters["net1"] = parameters[2]
-        self.parameters["net2"] = parameters[3]
+        #self.parameters = dict(self.parameters)
+        self.name = parameters[0]
+        self.net1 = parameters[1]
+        self.net2 = parameters[2]
+    def __str__(self):
+        return str(self.__dict__)
+    # convert custom string to float
+    def str2float(self, number):
+        nb = number.lower()
+        if nb.find('k') >= 0:
+            return 1e3 * float(nb.replace('k', '.'))
+        elif nb.find('m') >= 0:
+            return 1e6 * float(nb.replace('m', '.'))
+        else:
+            return float(nb)
+class Generator(Component):
+    V = 0
+    S = 0
+    X = 0
+    def __init__(self, parameters):
+        self.type = 'G'
+        Component.__init__(self, parameters)
+        self.V = self.str2float(parameters[3])
+        self.S = self.str2float(parameters[4])
+        self.X = self.str2float(parameters[5])
+class Transformer(Component):
+    Pri = ''
+    VPri = 0
+    Sec = ''
+    VSec = 0
+    S = 0
+    X = 0
+    def __init__(self, parameters):
+        self.type = 'T'
+        Component.__init__(self, parameters)
+        self.Pri = parameters[3]
+        self.VPri = self.str2float(parameters[4])
+        self.Sec = parameters[5]
+        self.VSec = self.str2float(parameters[6])
+        self.S = self.str2float(parameters[7])
+        self.X = self.str2float(parameters[8])
+class TransmissionLine(Component):
+    R = 0
+    L = 0
+    C = 0
+    def __init__(self, parameters):
+        self.type = 'LT'
+        Component.__init__(self, parameters)
+        self.R = self.str2float(parameters[3])
+        self.L = self.str2float(parameters[4])
+        self.C = self.str2float(parameters[5])
+class Motor(Component):
+    V = 0
+    S = 0
+    X = 0
+    def __init__(self, parameters):
+        self.type = 'M'
+        Component.__init__(self, parameters)
+        self.V = self.str2float(parameters[3])
+        self.S = self.str2float(parameters[4])
+        self.X = self.str2float(parameters[5])
 
 class Circuit:
 
     # list of methods to initialize new components
     def addGenerator(self, paramList):
         parameters = paramList.split(" ")
-        print parameters
-        tempGen = Component(['G'] + parameters)
-        # botar mais coisas aqui
+        tempGen = Generator(parameters)
         self.compList.append(tempGen)
-        print map(lambda x : x.parameters['name'], self.compList)
-
     def addTransformer(self, paramList):
-        print 'transformador'
+        parameters = paramList.split(" ")
+        tempTrafo = Transformer(parameters)
+        self.compList.append(tempTrafo)
     def addTransmissionLine(self, paramList):
-        print 'linha'
+        parameters = paramList.split(" ")
+        tempTL = TransmissionLine(parameters)
+        self.compList.append(tempTL)
     def addMotor(self, paramList):
-        print 'motor'
+        parameters = paramList.split(" ")
+        tempMotor = Motor(parameters)
+        self.compList.append(tempMotor)
+    # faltou isso
     def addLoad(self, paramList):
-        print 'carga'
+        pass
     def addVbase(self, paramList):
         parameters = paramList.split(" ")
         self.base['V'] = self.str2float(parameters[1])
@@ -99,18 +157,84 @@ class Circuit:
             return 1e6 * float(nb.replace('m', '.'))
         else:
             return float(nb)
-    def getVbOfNet(self, net):
-        pass
-    def sortComponentsInNet(self, net, components):
-        pass
+    # return list with all nets in the circuit
     def sortNets(self):
+        netList = [self.base['net']]
+        for x in range(len(self.compList)):
+            if self.compList[x].net1 not in netList:
+                netList.append(self.compList[x].net1)
+                if self.compList[x].net2 not in netList:
+                    netList.append(self.compList[x].net2)
+        netList.remove('0')
+        netList.sort()
+        return netList
+    # return list with all components in current net
+    def sortComponentsInNet(self, net, vect):
+        temp = [x for x in vect if x.net1 is net]
+        temp.sort()
+        return temp
+    # get index of element with specified name
+    def getIndexByName(self, name, vect):
+        for x in range(len(vect)):
+            if name in vect[x].name:
+                return x
+    def unionWithoutDuplicate(self,vect1,vect2):
+        vect = []
+        for i in vect1:
+            if i not in vect:
+                vect.append(i)
+        for i in vect2:
+            if i not in vect:
+                vect.append(i)
+        return vect
+    # get Vb of specified net
+    def getVbOfNet(self, net):
+        pathToNet = self.getPathToNet(net)
+        pass
+    # return list of elements that goes from base net to specified net
+    def getPathToNet(self, net):
+
+        # remove all generators, motors and loads
+        connectionsList = [x for x in self.compList if x.net2 is not '0']
+        # init current net
+        currentNet = self.base['net']
+        # init vectors
+        path = []
+        branch = self.sortComponentsInNet(currentNet, connectionsList)
+
+        while currentNet is not net:
+            # check if branch is empty
+            if not branch:
+                # remove component from connections list
+                del connectionsList[self.getIndexByName(path[-1].name, connectionsList)]
+                # update all vectors to remove deleted components
+                path = [x for x in path if x in connectionsList]
+                branch.append(path[-1])
+            # goto next component
+            currentNet = branch[0].net2
+            # append to path
+            if branch[0] not in path:
+                path.append(branch[0])
+            # calculate next branch
+            branch = [x for x in self.sortComponentsInNet(currentNet, connectionsList)]
+        return [x.name for x in path]
+
+    def calcPu(self,compVect, Vb):
         pass
 
 
-
-    # metodos publicos
+    # ===== metodos publicos =====
     def pu(self):
-        pass
+        # get list of all nets in the circuit
+        netStack = self.sortNets()
+        for x in range(len(netStack)):
+            # get list of components for current net
+            compVect = self.sortComponentsInNet(netStack[x], self.compList)
+            # get Vb for current net
+            currentVb = self.getVbOfNet(netStack[x])
+            # calculate and update PU values of components in current net
+            self.calcPu(compVect,currentVb)
+
 
     def printCirc(self):
         pass
