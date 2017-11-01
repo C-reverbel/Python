@@ -1,0 +1,21 @@
+* Valores base
+Vb 22k 1
+Sb 100M
+
+* Geradores
+G1 1 0 22k 90M 0.18
+
+* Demais componentes
+T1 1 2 D 22k Y 220k 50M 0.1
+T2 3 4 Y 220k D 11k 40M 0.06
+T3 1 5 D 22k Y 110k 40M 0.064
+T4 6 4 Y 110k D 11k 40M 0.08
+T5 5 7 D 110k Y 152k42 30M 0.1
+T6 8 9 Y 152k42 Y 76k21 30M 0.2
+
+LT1 2 3 0 48.4 0
+LT2 5 6 0 65.43 0
+LT3 7 8 0 45 0
+
+M1 4 0 10k45 66M5 0.185
+* faltam as cargas

@@ -1,3 +1,8 @@
+# ===== PARSER DECLARATION =====
+
+# ===== PARSER DECLARATION =====
+
+
 
 class Component:
     name = ""
@@ -87,6 +92,19 @@ class Motor(Component):
         self.V = self.str2float(parameters[3])
         self.S = self.str2float(parameters[4])
         self.X = self.str2float(parameters[5])
+class Load(Component):
+    P = 0
+    Q = 0
+
+    def __init__(self, parameters):
+        self.type = 'C'
+        Component.__init__(self, parameters)
+        self.P = self.str2float(parameters[3])
+        self.Q = self.str2float(parameters[4])
+
+# ===== FACTORY DECLARATION =====
+
+# ===== FACTORY DECLARATION =====
 
 class Circuit:
 
@@ -107,9 +125,10 @@ class Circuit:
         parameters = paramList.split(" ")
         tempMotor = Motor(parameters)
         self.compList.append(tempMotor)
-    # faltou isso
     def addLoad(self, paramList):
-        pass
+        parameters = paramList.split(" ")
+        tempLoad = Load(parameters)
+        self.compList.append(tempLoad)
     def addVbase(self, paramList):
         parameters = paramList.split(" ")
         self.base['V'] = self.str2float(parameters[1])
@@ -117,7 +136,6 @@ class Circuit:
     def addSbase(self, paramList):
         parameters = paramList.split(" ")
         self.base['S'] = self.str2float(parameters[1])
-
     componentsInitDict = {
         'G': addGenerator,
         'T': addTransformer,
@@ -127,7 +145,8 @@ class Circuit:
         'Vb': addVbase,
         'Sb': addSbase,
     }
-    compTypeDict = ['G', 'T','LT','M','C', 'Vb', 'Sb']
+
+    compTypeDict = ['G', 'T','LT','M','C', 'Vb', 'Sb', 'C']
     base = {
         'V' : None,
         'S' : None,
@@ -135,7 +154,6 @@ class Circuit:
     }
     circFile = ""
     compList = []
-    circFile = ""
 
     def __init__(self, fileName):
         self.circFile = fileName
@@ -200,11 +218,12 @@ class Circuit:
     # get Vb of specified net
     def getVbOfNet(self, net):
         pathToNet = self.getPathToNet(net)
+        print 'path to net ' + net + ' = ',
+        print [str(x) for x in pathToNet]
         return self.base['V'] * self.calcVbMultiplier(pathToNet)
         pass
     # return list of elements that goes from base net to specified net
     def getPathToNet(self, net):
-
         # remove all generators, motors and loads
         connectionsList = [x for x in self.compList if x.net2 is not '0']
         # init current net
@@ -212,6 +231,7 @@ class Circuit:
         # init vectors
         path = []
         branch = self.sortComponentsInNet(currentNet, connectionsList)
+        #path += branch
 
         while currentNet is not net:
             # check if branch is empty
@@ -220,7 +240,10 @@ class Circuit:
                 del connectionsList[self.getIndexByName(path[-1].name, connectionsList)]
                 # update all vectors to remove deleted components
                 path = [x for x in path if x in connectionsList]
-                branch.append(path[-1])
+                if self.sortComponentsInNet(self.base['net'], connectionsList):
+                    branch = self.sortComponentsInNet(self.base['net'],connectionsList)
+                if path:
+                    branch.append(path[-1])
             # goto next component
             currentNet = branch[0].net2
             # append to path
@@ -228,6 +251,7 @@ class Circuit:
                 path.append(branch[0])
             # calculate next branch
             branch = [x for x in self.sortComponentsInNet(currentNet, connectionsList)]
+
         return [x.name for x in path]
     # get component voltage multiplier based on its name
     def getVoltageMultiplier(self, componentName):
@@ -250,8 +274,10 @@ class Circuit:
             print 'Xpu = ' + str(self.compList[i].X_pu)
     def pu(self):
         for x in range(len(self.compList)):
+            print 'finding path to: ' + self.compList[x].net1 + ', actual component: ' + self.compList[x].name
             currentVb = self.getVbOfNet(self.compList[x].net1)
             currentSb = self.base['S']
+            #print 'current Vb = ' + str(currentVb) + ', current Sb = ' + str(currentSb)
             self.compList[x].initPu(currentVb, currentSb)
     def printCirc(self):
         pass
