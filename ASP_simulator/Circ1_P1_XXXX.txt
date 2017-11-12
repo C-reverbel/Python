@@ -6,8 +6,8 @@ Sb 100M
 G1 1 0 13k8 20M 0.1
 
 * Demais componentes
-T1 1 2 D 13k8 Y 69k 25M 0.1
-T2 3 B D 69k Y 13k8 20M 0.1
+T1 1 2 13k8 69k 25M 0.1
+T2 3 B 69k 13k8 20M 0.1
 
 LT1 2 3 0 50 0
 

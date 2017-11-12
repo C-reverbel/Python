@@ -1,8 +1,5 @@
-# ===== PARSER DECLARATION =====
-
-# ===== PARSER DECLARATION =====
-
-
+from pyparsing import *
+import pyparsing
 
 class Component:
     name = ""
@@ -12,12 +9,14 @@ class Component:
     Vmul = 1
     X_pu = 0
     V_pu = 0
+    lineTemplate = ""
 
-    def __init__(self, parameters):
-        #self.parameters = dict(self.parameters)
-        self.name = parameters[0]
-        self.net1 = parameters[1]
-        self.net2 = parameters[2]
+    def __init__(self, line):
+        lineParsed = self.parseComponent(line, self.lineTemplate)
+        for attr, value in lineParsed.iteritems():
+            setattr(self, attr, value)
+        # change required attributes to float
+        self.conv2float()
     def __str__(self):
         return str(self.__dict__)
     # convert custom string to float
@@ -42,92 +41,82 @@ class Component:
             self.X_pu = self.L / ((Vb**2)/Sb)
         if hasattr(self, 'V'):
             self.V_pu = self.V / Vb
-class Generator(Component):
-    V = 0
-    S = 0
-    X = 0
+    # returns an object with all parameters initialized
+    def parseComponent(self, line, parseTemplate):
+        # parse definitions
+        point = Literal('.')
+        e = CaselessLiteral('E')
+        plusorminus = Literal('+') | Literal('-')
+        number = Word(nums)
+        integer = Combine(Optional(plusorminus) + number)
+        floatnumber = Combine(integer +
+                              Optional(point + Optional(number)) +
+                              Optional(e + integer)
+                              )
+        token = Or([Word(alphanums),floatnumber])
+        # parse definitions
 
-    def __init__(self, parameters):
+        lineSplit = parseTemplate.split(" ")
+        templParser = token(lineSplit[0])
+        del lineSplit[0]
+        for a in lineSplit:
+            templParser += token(a)
+        n = templParser.parseString(line)
+        return n
+    # change required attributes to float
+    def conv2float(self):
+        for attr, val in self.__dict__.iteritems():
+            if attr in self.floatElements:
+                setattr(self,attr,self.str2float(val))
+class Generator(Component):
+    lineTemplate = "name net1 net2 V S X"
+    floatElements = ['V', 'S', 'X']
+    def __init__(self, line):
         self.type = 'G'
-        Component.__init__(self, parameters)
-        self.V = self.str2float(parameters[3])
-        self.S = self.str2float(parameters[4])
-        self.X = self.str2float(parameters[5])
+        Component.__init__(self, line)
 class Transformer(Component):
-    Pri = ''
-    VPri = 0
-    Sec = ''
-    VSec = 0
-    S = 0
-    X = 0
-    def __init__(self, parameters):
+    lineTemplate = "name net1 net2 VPri VSec S X"
+    floatElements = ['VPri', 'VSec', 'S', 'X']
+    def __init__(self, line):
         self.type = 'T'
-        Component.__init__(self, parameters)
-        self.Pri = parameters[3]
-        self.VPri = self.str2float(parameters[4])
-        self.Sec = parameters[5]
-        self.VSec = self.str2float(parameters[6])
-        self.S = self.str2float(parameters[7])
-        self.X = self.str2float(parameters[8])
-        # calc Voltage multiplier
+        Component.__init__(self, line)
         self.Vmul = self.VSec / self.VPri
 class TransmissionLine(Component):
-    R = 0
-    L = 0
-    C = 0
-    def __init__(self, parameters):
+    lineTemplate = "name net1 net2 R L C"
+    floatElements = ['R', 'L', 'C']
+    def __init__(self, line):
         self.type = 'LT'
-        Component.__init__(self, parameters)
-        self.R = self.str2float(parameters[3])
-        self.L = self.str2float(parameters[4])
-        self.C = self.str2float(parameters[5])
+        Component.__init__(self, line)
 class Motor(Component):
-    V = 0
-    S = 0
-    X = 0
-
-    def __init__(self, parameters):
+    lineTemplate = "name net1 net2 V S X"
+    floatElements = ['V', 'S', 'X']
+    def __init__(self, line):
         self.type = 'M'
-        Component.__init__(self, parameters)
-        self.V = self.str2float(parameters[3])
-        self.S = self.str2float(parameters[4])
-        self.X = self.str2float(parameters[5])
+        Component.__init__(self, line)
 class Load(Component):
-    P = 0
-    Q = 0
-
-    def __init__(self, parameters):
+    lineTemplate = "name net1 net2 V P Q"
+    floatElements = ['V', 'P', 'Q']
+    def __init__(self, line):
         self.type = 'C'
-        Component.__init__(self, parameters)
-        self.P = self.str2float(parameters[3])
-        self.Q = self.str2float(parameters[4])
-
-# ===== FACTORY DECLARATION =====
-
-# ===== FACTORY DECLARATION =====
+        Component.__init__(self, line)
 
 class Circuit:
 
     # list of methods to initialize new components
     def addGenerator(self, paramList):
-        parameters = paramList.split(" ")
-        tempGen = Generator(parameters)
+        tempGen = Generator(paramList)
         self.compList.append(tempGen)
     def addTransformer(self, paramList):
-        parameters = paramList.split(" ")
-        tempTrafo = Transformer(parameters)
+        tempTrafo = Transformer(paramList)
         self.compList.append(tempTrafo)
     def addTransmissionLine(self, paramList):
-        parameters = paramList.split(" ")
-        tempTL = TransmissionLine(parameters)
+        tempTL = TransmissionLine(paramList)
         self.compList.append(tempTL)
     def addMotor(self, paramList):
-        parameters = paramList.split(" ")
-        tempMotor = Motor(parameters)
+        tempMotor = Motor(paramList)
         self.compList.append(tempMotor)
     def addLoad(self, paramList):
-        parameters = paramList.split(" ")
-        tempLoad = Load(parameters)
+        tempLoad = Load(paramList)
         self.compList.append(tempLoad)
     def addVbase(self, paramList):
         parameters = paramList.split(" ")
@@ -284,9 +273,3 @@ class Circuit:
     def matrix(self):
         pass
 
-# nets = sortNets()
-# for net in nets:
-#     V = getVbOfNet[net]
-#     componentsList = sortComponentsInNet[net, components]
-#     for component in componentsList:
-#         calcPu[component,V]
