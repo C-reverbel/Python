@@ -1,5 +1,6 @@
 from pyparsing import *
 import pyparsing
+import math
 
 class Component:
     name = ""
@@ -51,7 +52,7 @@ class Component:
         integer = Combine(Optional(plusorminus) + number)
         floatnumber = Combine(integer +
                               Optional(point + Optional(number)) +
-                              Optional(e + integer)
+                              Optional(alphanums)
                               )
         token = Or([Word(alphanums),floatnumber])
         # parse definitions
@@ -68,12 +69,16 @@ class Component:
         for attr, val in self.__dict__.iteritems():
             if attr in self.floatElements:
                 setattr(self,attr,self.str2float(val))
+
 class Generator(Component):
     lineTemplate = "name net1 net2 V S X"
     floatElements = ['V', 'S', 'X']
     def __init__(self, line):
         self.type = 'G'
         Component.__init__(self, line)
+    def initPu(self, Vb, Sb):
+        self.X_pu = self.X * ((self.V ** 2) / self.S) / ((Vb ** 2) / Sb)
+        self.V_pu = self.V / Vb
 class Transformer(Component):
     lineTemplate = "name net1 net2 VPri VSec S X"
     floatElements = ['VPri', 'VSec', 'S', 'X']
@@ -81,24 +86,38 @@ class Transformer(Component):
         self.type = 'T'
         Component.__init__(self, line)
         self.Vmul = self.VSec / self.VPri
+    def initPu(self, Vb, Sb):
+        self.X_pu = self.X * ((self.VPri ** 2) / self.S) / ((Vb ** 2) / Sb)
 class TransmissionLine(Component):
-    lineTemplate = "name net1 net2 R L C"
-    floatElements = ['R', 'L', 'C']
+    lineTemplate = "name net1 net2 R L"
+    floatElements = ['R', 'L']
     def __init__(self, line):
         self.type = 'LT'
         Component.__init__(self, line)
+    def initPu(self, Vb, Sb):
+        Zb = (Vb ** 2) / Sb
+        self.R_pu = self.R / Zb
+        self.X_pu = self.L / Zb
 class Motor(Component):
     lineTemplate = "name net1 net2 V S X"
     floatElements = ['V', 'S', 'X']
     def __init__(self, line):
         self.type = 'M'
         Component.__init__(self, line)
+    def initPu(self, Vb, Sb):
+        self.X_pu = self.X * ((self.V ** 2) / self.S) / ((Vb ** 2) / Sb)
+        self.V_pu = self.V / Vb
 class Load(Component):
     lineTemplate = "name net1 net2 V P Q"
     floatElements = ['V', 'P', 'Q']
     def __init__(self, line):
         self.type = 'C'
         Component.__init__(self, line)
+    def initPu(self, Vb, Sb):
+        Zb = (Vb ** 2) / Sb
+        S = math.sqrt(self.P ** 2 + self.Q ** 2)
+        self.R_pu = self.P * (self.V ** 2) / (S * S * Zb)
+        self.X_pu = self.Q * (self.V ** 2) / (S * S * Zb)
 
 class Circuit:
 
@@ -131,11 +150,12 @@ class Circuit:
         'LT': addTransmissionLine,
         'M': addMotor,
         'C': addLoad,
+        'L': addLoad,
         'Vb': addVbase,
         'Sb': addSbase,
     }
 
-    compTypeDict = ['G', 'T','LT','M','C', 'Vb', 'Sb', 'C']
+    compTypeDict = ['G', 'T','LT','M','C', 'Vb', 'Sb', 'L']
     base = {
         'V' : None,
         'S' : None,
@@ -207,8 +227,8 @@ class Circuit:
     # get Vb of specified net
     def getVbOfNet(self, net):
         pathToNet = self.getPathToNet(net)
-        print 'path to net ' + net + ' = ',
-        print [str(x) for x in pathToNet]
+        #print 'path to net ' + net + ' = ',
+        #print [str(x) for x in pathToNet]
         return self.base['V'] * self.calcVbMultiplier(pathToNet)
         pass
     # return list of elements that goes from base net to specified net
@@ -256,14 +276,20 @@ class Circuit:
     # ===== metodos publicos =====
     def printPu(self):
         self.pu()
+        alphabet = 'VXR'
         for i in  range(len(self.compList)):
-            print self.compList[i].name + ' ',
-            if self.compList[i].V_pu:
-                print 'Vpu = ' + str(self.compList[i].V_pu) + ' ',
-            print 'Xpu = ' + str(self.compList[i].X_pu)
+            temp = dir(self.compList[i])
+            attrList = [x for x in temp if "_pu" in x]
+            attr = sorted(attrList, key=lambda word: [alphabet.index(c) for c in word[0]])
+            print self.compList[i].name + ' => ',
+            for j in range(len(attr)):
+                if getattr(self.compList[i], attr[j]):
+                    print attr[j] + '= ' + str(getattr(self.compList[i],attr[j])) + ' ',
+            print ''
+
     def pu(self):
         for x in range(len(self.compList)):
-            print 'finding path to: ' + self.compList[x].net1 + ', actual component: ' + self.compList[x].name
+            #print 'finding path to: ' + self.compList[x].net1 + ', actual component: ' + self.compList[x].name
             currentVb = self.getVbOfNet(self.compList[x].net1)
             currentSb = self.base['S']
             #print 'current Vb = ' + str(currentVb) + ', current Sb = ' + str(currentSb)
